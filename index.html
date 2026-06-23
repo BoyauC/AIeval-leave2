@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AI識詐行動 — 複審評分平台</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222538;
+    --border: #2e3147;
+    --accent: #4f6ef7;
+    --accent2: #7c3aed;
+    --gold: #f59e0b;
+    --green: #10b981;
+    --red: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --radius: 12px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── Header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-shrink: 0; gap: 12px; flex-wrap: wrap;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 38px; height: 38px; background: linear-gradient(135deg,var(--accent),var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .logo h1 { font-size: 15px; font-weight: 700; line-height: 1.2; }
+  .logo p { font-size: 10px; color: var(--text2); letter-spacing: 1px; }
+  .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn { padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3b5cf0; }
+  .btn-success { background: var(--green); color: #fff; }
+  .btn-success:hover { opacity: 0.85; }
+  .btn-ghost { background: var(--border); color: var(--text2); }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+  .btn-ai { background: linear-gradient(135deg,#7c3aed,#4f6ef7); color: #fff; }
+  .progress-badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .progress-badge span { color: var(--accent); font-weight: 700; }
+
+  /* ── Layout ── */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Left Panel ── */
+  .panel-left {
+    width: 280px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+    transition: width 0.3s, transform 0.3s;
+  }
+  .panel-left.collapsed { width: 0; }
+  .left-search { padding: 12px; border-bottom: 1px solid var(--border); }
+  .search-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px; }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+  .work-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .work-item {
+    padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px;
+    border: 1px solid transparent; transition: all 0.15s;
+  }
+  .work-item:hover { background: var(--surface2); border-color: var(--border); }
+  .work-item.active { background: rgba(79,110,247,0.15); border-color: var(--accent); }
+  .work-item.scored { border-left: 3px solid var(--green); }
+  .work-num { font-size: 10px; color: var(--text3); font-weight: 600; }
+  .work-title { font-size: 13px; font-weight: 600; margin: 2px 0; line-height: 1.3; }
+  .work-score-badge { font-size: 11px; color: var(--green); }
+
+  /* ── Center Panel ── */
+  .panel-center { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+  .center-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; padding: 0 16px; gap: 4px; }
+  .tab-btn { padding: 10px 16px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .center-content { flex: 1; overflow: hidden; position: relative; }
+  .tab-pane { display: none; height: 100%; flex-direction: column; }
+  .tab-pane.active { display: flex; }
+
+  .work-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .work-header-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .work-header-meta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .meta-tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--text2); }
+
+  /* PDF */
+  .pdf-frame { flex: 1; border: none; background: #525659; }
+  .pdf-fallback { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text2); }
+
+  /* Video */
+  .video-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; overflow: hidden; }
+  .video-container iframe { width: 100%; height: 100%; border: none; }
+  .video-external { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+  .video-external a { color: var(--accent); word-break: break-all; font-size: 13px; }
+  .open-btn { padding: 12px 24px; background: var(--accent); color: #fff; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; }
+
+  /* ── Right Panel ── */
+  .panel-right {
+    width: 320px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+    transition: width 0.3s;
+  }
+  .panel-right.collapsed { width: 0; }
+  .right-header { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+  .right-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* Quick scores */
+  .section-label { font-size: 11px; font-weight: 700; color: var(--text3); letter-spacing: 1px; margin-bottom: 6px; }
+  .quick-btns { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
+  .quick-btn {
+    padding: 8px 4px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .quick-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .quick-btn.selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Criteria scoring */
+  .criterion-item { background: var(--surface2); border-radius: 10px; padding: 10px 12px; border: 1px solid var(--border); }
+  .criterion-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .criterion-name { font-size: 13px; font-weight: 700; }
+  .criterion-weight { font-size: 10px; color: var(--accent); background: rgba(79,110,247,0.15); border-radius: 10px; padding: 2px 7px; }
+  .criterion-desc { font-size: 11px; color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
+  .criterion-initial { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+  .criterion-initial span { color: var(--gold); font-weight: 600; }
+  .score-row { display: flex; align-items: center; gap: 6px; }
+  .score-quick { display: flex; gap: 4px; flex: 1; }
+  .score-q-btn { flex: 1; padding: 5px 2px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text2); font-size: 12px; cursor: pointer; transition: all 0.15s; text-align: center; }
+  .score-q-btn:hover { border-color: var(--accent); }
+  .score-q-btn.sel { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .score-num { width: 44px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px; color: var(--text); font-size: 13px; text-align: center; }
+  .score-num:focus { outline: none; border-color: var(--accent); }
+
+  /* Total */
+  .total-box { background: linear-gradient(135deg, rgba(79,110,247,0.2), rgba(124,58,237,0.2)); border: 1px solid var(--accent); border-radius: 12px; padding: 12px; text-align: center; }
+  .total-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+  .total-value { font-size: 36px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .total-max { font-size: 13px; color: var(--text3); }
+  .initial-total { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .initial-total span { color: var(--gold); }
+
+  .comment-area { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px; width: 100%; color: var(--text); font-size: 12px; resize: vertical; min-height: 60px; font-family: inherit; }
+  .comment-area:focus { outline: none; border-color: var(--accent); }
+
+  .submit-row { display: flex; gap: 6px; }
+  .btn-submit { flex: 1; padding: 11px; border-radius: 10px; background: var(--accent); color: #fff; border: none; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .btn-submit:hover { background: #3b5cf0; }
+  .btn-save { padding: 11px 14px; border-radius: 10px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border); font-size: 12px; cursor: pointer; transition: all 0.2s; }
+  .btn-save:hover { border-color: var(--accent); color: var(--text); }
+
+  /* AI Panel */
+  .ai-panel { background: linear-gradient(135deg, rgba(124,58,237,0.1), rgba(79,110,247,0.1)); border: 1px solid rgba(124,58,237,0.4); border-radius: 10px; padding: 10px 12px; }
+  .ai-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-label { font-size: 12px; font-weight: 700; color: #a78bfa; }
+  .api-input-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .api-key-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 12px; font-family: monospace; }
+  .api-key-input:focus { outline: none; border-color: #7c3aed; }
+  .btn-ai-score { padding: 6px 12px; background: linear-gradient(135deg,#7c3aed,#4f6ef7); color: #fff; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn-ai-score:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ai-status { font-size: 11px; color: var(--text3); text-align: center; min-height: 16px; }
+  .ai-status.loading { color: #a78bfa; }
+  .ai-status.error { color: var(--red); }
+  .ai-status.success { color: var(--green); }
+
+  /* Mobile overlay */
+  .panel-toggle { display: none; padding: 6px 10px; background: var(--border); border: none; border-radius: 8px; color: var(--text2); cursor: pointer; font-size: 12px; }
+
+  /* CSV export */
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 700; z-index: 1000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 500; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; max-width: 480px; width: 100%; }
+  .modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+  .modal input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 14px; margin-bottom: 12px; }
+  .modal input:focus { outline: none; border-color: var(--accent); }
+  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .panel-left { position: absolute; left: 0; top: 0; height: 100%; z-index: 100; transform: translateX(-100%); width: 280px !important; }
+    .panel-left.open { transform: translateX(0); box-shadow: var(--shadow); }
+    .panel-right { position: absolute; right: 0; top: 0; height: 100%; z-index: 100; transform: translateX(100%); width: 320px !important; }
+    .panel-right.open { transform: translateX(0); box-shadow: var(--shadow); }
+    .panel-toggle { display: inline-flex; align-items: center; gap: 4px; }
+    .main { position: relative; }
+    .backdrop { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; }
+    .backdrop.show { display: block; }
+  }
+  @media (max-width: 480px) {
+    .logo h1 { font-size: 13px; }
+    .tab-btn { padding: 8px 10px; font-size: 12px; }
+    .quick-btn { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏆</div>
+    <div>
+      <h1>AI識詐行動 複審評分平台</h1>
+      <p>AI COMPETITION REVIEW SYSTEM</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="panel-toggle" onclick="toggleLeft()" id="btnLeft">☰ 作品清單</button>
+    <div class="progress-badge">已評 <span id="scoredCount">0</span> / <span id="totalCount">0</span> 組</div>
+    <button class="btn btn-success" onclick="exportCSV()">⬇ 輸出 CSV</button>
+    <button class="btn btn-ghost" onclick="openReviewerModal()">👤 評審姓名</button>
+    <button class="panel-toggle" onclick="toggleRight()" id="btnRight">評分 ☰</button>
+  </div>
+</header>
+
+<div class="main" id="main">
+  <div class="backdrop" id="backdrop" onclick="closeAll()"></div>
+
+  <!-- Left Panel -->
+  <div class="panel-left" id="panelLeft">
+    <div class="left-search">
+      <input class="search-input" type="text" placeholder="🔍 搜尋題目..." id="searchInput" oninput="filterWorks()">
+    </div>
+    <div class="work-list" id="workList"></div>
+  </div>
+
+  <!-- Center Panel -->
+  <div class="panel-center">
+    <div id="workHeaderBar" class="work-header" style="display:none">
+      <div class="work-header-title" id="centerTitle">—</div>
+      <div class="work-header-meta">
+        <span class="meta-tag" id="metaGroup">組別 —</span>
+        <span class="meta-tag" id="metaStatus" style="color:var(--green)">▶ 影片可開啟</span>
+      </div>
+    </div>
+    <div class="center-tabs">
+      <button class="tab-btn active" onclick="switchTab('pdf',this)">📄 作品說明書</button>
+      <button class="tab-btn" onclick="switchTab('video',this)">🎬 影音作品</button>
+    </div>
+    <div class="center-content">
+      <!-- PDF Tab -->
+      <div class="tab-pane active" id="tab-pdf">
+        <div id="pdfContainer" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+          <div class="pdf-fallback" id="pdfPlaceholder">
+            <div style="font-size:48px">📋</div>
+            <div style="font-size:14px">請從左側選擇作品</div>
+          </div>
+          <iframe id="pdfFrame" class="pdf-frame" style="display:none"></iframe>
+          <div id="pdfFallback" class="pdf-fallback" style="display:none">
+            <div style="font-size:32px">📄</div>
+            <div style="font-size:14px;color:var(--text2)">PDF 無法直接顯示</div>
+            <a id="pdfOpenLink" href="#" target="_blank" class="open-btn">🔗 開啟作品說明書</a>
+          </div>
+        </div>
+      </div>
+      <!-- Video Tab -->
+      <div class="tab-pane" id="tab-video">
+        <div class="video-container" id="videoContainer">
+          <div class="video-external" id="videoPlaceholder">
+            <div style="font-size:48px">🎬</div>
+            <div style="font-size:14px">請從左側選擇作品</div>
+          </div>
+          <iframe id="videoFrame" style="display:none;width:100%;height:100%;border:none" allowfullscreen></iframe>
+          <div id="videoExternal" class="video-external" style="display:none">
+            <div style="font-size:40px">🔗</div>
+            <div style="font-size:14px;color:var(--text2);margin-bottom:4px">此影片需外部開啟</div>
+            <a id="videoExternalLink" href="#" target="_blank" class="open-btn">▶ 開啟影片連結</a>
+            <span id="videoExternalUrl" style="font-size:11px;color:var(--text3);word-break:break-all;max-width:400px"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="panel-right" id="panelRight">
+    <div class="right-header">
+      <span>✍️ 評分工作區</span>
+      <button class="btn btn-ai btn-sm" style="font-size:11px;padding:4px 8px" onclick="toggleAIPanel()">🤖 AI 評分</button>
+    </div>
+    <div class="right-body" id="rightBody">
+      <div style="text-align:center;color:var(--text3);padding:40px 0;font-size:13px">請從左側選擇作品開始評分</div>
+    </div>
+  </div>
+</div>
+
+<!-- Reviewer Modal -->
+<div class="modal-overlay" id="reviewerModal">
+  <div class="modal">
+    <h2>👤 設定評審資訊</h2>
+    <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px">評審姓名</label>
+    <input type="text" id="reviewerName" placeholder="請輸入您的姓名..." value="">
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeReviewerModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveReviewer()">確認</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast">✅ 操作成功</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const CRITERIA = [
+  { key: 'ai',        name: 'AI 倫理與工具運用',  weight: 0.2, desc: '工具操作之合理性，是否主動避免偏見或不當內容生成。' },
+  { key: 'media',     name: '媒體素養與查證邏輯',  weight: 0.2, desc: '查證步驟之嚴謹度，以及對資訊來源判讀的精確性。' },
+  { key: 'narrative', name: '敘事創意與視覺表現',  weight: 0.2, desc: '故事情節的創新度、視覺呈現的吸引力與藝術性。' },
+  { key: 'advocacy',  name: '宣導價值與實用性',    weight: 0.2, desc: '作品是否淺顯易懂，具備教育推廣與社會傳播之潛力。' },
+  { key: 'completion',name: '整體完成度',          weight: 0.2, desc: '作品結構完整性與格式符合度。' },
+];
+
+const WORKS = [
+  { id:1,  title:'每天說早安的金俊熙',             videoUrl:'https://youtu.be/gzY8O0c6i70',  docUrl:'https://docs.google.com/document/d/15x37ja1Bjr7fGljZNgu8PYeq2irVyQR7/edit?usp=sharing', pdfFile:'1-每天說早安的金俊熙.pdf',                   initial:{ai:19,media:19,narrative:18,advocacy:18,completion:18} },
+  { id:2,  title:'追星的女孩:別讓愛變成陷阱',      videoUrl:'https://youtu.be/KxoKh2r2E-Q',  docUrl:'https://docs.google.com/document/d/1owLutObKlqfI1A0QWi5IJE5TUIv7oQE0/edit?usp=sharing', pdfFile:'2-追星的女孩：別讓愛變成陷阱.pdf',             initial:{ai:19,media:19,narrative:19,advocacy:19,completion:19} },
+  { id:3,  title:'IG帥哥的真面目',                 videoUrl:'https://youtu.be/vgLGEDcWidE',  docUrl:'https://docs.google.com/document/d/1t4JMB6DEMjV5kdw6phNOn7c7mVlWNeSw/edit?usp=sharing', pdfFile:'3-IG帥哥的真面目.pdf',                       initial:{ai:19,media:19,narrative:17,advocacy:18,completion:18} },
+  { id:4,  title:'指尖的藍色陷阱',                 videoUrl:'https://youtu.be/h6j-Hg2SCgE',  docUrl:'https://docs.google.com/document/d/14jJYtLC_4mUviNK3QxgGtBhi0e4a6r75/edit?usp=sharing', pdfFile:'4-指尖的藍色陷阱.pdf',                       initial:{ai:18,media:18,narrative:19,advocacy:18,completion:19} },
+  { id:5,  title:'夢想的門票',                     videoUrl:'https://youtu.be/CEZyj5Wbk7U', docUrl:'https://docs.google.com/document/d/1adaZRAnXPCXRZix7oPeJrXbuNBo9PTCo/edit?usp=sharing', pdfFile:'5-夢想的門票.pdf',                           initial:{ai:18,media:18,narrative:18,advocacy:18,completion:19} },
+  { id:6,  title:'造型與黑色訊息',                 videoUrl:'https://youtu.be/YE2WobswH00',  docUrl:'https://docs.google.com/document/d/1csNJLKUfEXyCHUvoW7UDRXnviuPXwoPQ/edit?usp=sharing', pdfFile:'6-造型與黑色訊息.pdf',                       initial:{ai:17,media:18,narrative:18,advocacy:18,completion:19} },
+  { id:7,  title:'蟀哥的魅力',                     videoUrl:'https://youtu.be/0IexbOBFXiU', docUrl:'https://docs.google.com/document/d/1kXHHQx07Z0H7-jvZ33h7-uRHU192fh7t/edit?usp=sharing', pdfFile:'7-蟀哥的魅力.pdf',                           initial:{ai:18,media:19,narrative:18,advocacy:18,completion:19} },
+  { id:8,  title:'香蕉與那張沒寄來的門票',          videoUrl:'https://youtu.be/L31Chv-UEDk', docUrl:'https://docs.google.com/document/d/1RYlOPl7WXV8JP2eAR1N-DqUMW4HCAgLj/edit?usp=sharing', pdfFile:'8-香蕉與那張沒寄來的門票.pdf',                initial:{ai:18,media:18,narrative:19,advocacy:18,completion:19} },
+  { id:9,  title:'大橘的虛寶保衛戰',               videoUrl:'https://o365kh-my.sharepoint.com/personal/justbeingfun_o365_kh_edu_tw/_layouts/15/stream.aspx?id=%2Fpersonal%2Fjustbeingfun%5Fo365%5Fkh%5Fedu%5Ftw%2FDocuments%2F20%5F%E5%88%86%E4%BA%AB%E5%8D%80%2F114%20AI%20%E7%B9%AA%E6%9C%AC%2F%E7%AC%AC1%E7%B5%84%EF%BC%88%E6%9F%8F%E9%9C%96%E3%80%81%E5%AE%A5%E7%91%8B%E3%80%81%E5%93%81%E5%AE%8F%EF%BC%89%2F4%2E%20%E4%BD%9C%E5%93%81%E7%B9%AA%E6%9C%AC%E5%BD%B1%E7%89%87%EF%BC%88%E7%9B%B4%E6%8E%A5%E4%B8%9F%E9%80%B2%E4%BE%86%EF%BC%89%2F%E5%A4%A7%E6%A9%98%E7%9A%84%E8%99%9B%E5%AF%B6%E4%BF%9D%E8%A1%9B%E6%88%B0%2Emp4&ga=1', docUrl:'https://drive.google.com/file/d/1QB1i5k18ycyvH0Zg3fW9IKSTaBwBtm3k/view?usp=drive_link', pdfFile:'9-大橘的虛寶保衛戰.pdf',                   initial:{ai:17,media:18,narrative:17,advocacy:17,completion:17} },
+  { id:10, title:'看不見的溫柔',                   videoUrl:'https://youtu.be/vxwydagOBjc', docUrl:'https://docs.google.com/document/d/13Dv5ejOnOgn8WvRBxRrp4K1_iHRmpbzi/edit?usp=sharing', pdfFile:'10-看不見的溫柔.pdf',                         initial:{ai:18,media:19,narrative:18,advocacy:18,completion:19} },
+  { id:11, title:'深夜的綠色光幕',                 videoUrl:'https://youtu.be/9vxJryhNMx8', docUrl:'https://docs.google.com/document/d/1hYjiKIwtRpdRXXOYmhaJHQTRx63t864j/edit?usp=sharing', pdfFile:'11-深夜的綠色光幕.pdf',                       initial:{ai:17,media:19,narrative:17,advocacy:18,completion:19} },
+  { id:12, title:'奶龍的防吃詐騙',                 videoUrl:'https://youtu.be/Joq-VwrYPec', docUrl:'https://docs.google.com/document/d/1ut9TqCWg0u8qu-dIRnSBUnAVCiXbZ3WU/edit?usp=sharing', pdfFile:'12-奶龍的防吃詐騙.pdf',                       initial:{ai:18,media:18,narrative:18,advocacy:18,completion:19} },
+  { id:13, title:'虛擬地下城',                     videoUrl:'https://youtu.be/WIY5zhWDnFw', docUrl:'https://docs.google.com/document/d/1rHLd5Vb8CI4difKH472fIBcJKvAh_c4B/edit?usp=sharing', pdfFile:'13-虛擬地下城.pdf',                           initial:{ai:18,media:18,narrative:18,advocacy:18,completion:18} },
+  { id:14, title:'消失的班費：螢幕後的陷阱',        videoUrl:'https://youtu.be/DgjYASVlzks', docUrl:'https://docs.google.com/document/d/1cmkw61wbMnVWp0jJd-4QPEiVzPJ40Dov/edit?usp=sharing', pdfFile:'14-消失的班費：螢幕後的陷阱.pdf',             initial:{ai:18,media:17,narrative:18,advocacy:17,completion:18} },
+  { id:15, title:'50 元的神裝',                    videoUrl:'https://youtu.be/BLo_Drt-iUk', docUrl:'https://docs.google.com/document/d/1Cau4-rs_4JWeOfuqsAKxaeqNqSFGmz8u/edit?usp=sharing', pdfFile:'15-50 元的神裝.pdf',                         initial:{ai:17,media:17,narrative:18,advocacy:18,completion:18} },
+  { id:16, title:'免費送傳說造型',                 videoUrl:'https://youtu.be/m-1RnYXiw1k', docUrl:'https://docs.google.com/document/d/1H2yZhenr7Rx0_pDpIkeSIOoXgn4E8CbX/edit?usp=sharing', pdfFile:'16-免費送傳說造型.pdf',                       initial:{ai:17,media:18,narrative:18,advocacy:18,completion:18} },
+  { id:17, title:'浪漫的邂逅',                     videoUrl:'https://youtu.be/cRhN-EyWW7w', docUrl:'https://docs.google.com/document/d/120NqAU0Z_qW7-OmFauuHC3idD2yIXcQt/edit?usp=sharing', pdfFile:'17-浪漫的邂逅.pdf',                           initial:{ai:18,media:18,narrative:19,advocacy:17,completion:18} },
+  { id:18, title:'不要點進去!假的韓國女團網站',     videoUrl:'https://youtu.be/MEjKQXdgsBQ', docUrl:'https://docs.google.com/document/d/177N-0B_fAtBfuOkU1VFH9cZYcwMLdJ6s/edit?usp=sharing', pdfFile:'18-不要點進去!假的韓國女團網站.pdf',         initial:{ai:19,media:19,narrative:18,advocacy:18,completion:19} },
+  { id:19, title:'電話裡的假媽媽',                 videoUrl:'https://youtu.be/XKDwSTim9dQ', docUrl:'https://docs.google.com/document/d/1FcLzCKQLT-rQUNmsgffl4FLhZDvkzDBl/edit?usp=sharing', pdfFile:'19-電話裡的假媽媽.pdf',                       initial:{ai:18,media:18,narrative:17,advocacy:18,completion:19} },
+  { id:20, title:'消失的棒球比賽',                 videoUrl:'https://youtu.be/04iwrYrRStE', docUrl:'https://docs.google.com/document/d/1N1YscPL_5U7HJB2DAwD5OxPDl-8pi2eG/edit?usp=sharing', pdfFile:'20-消失的棒球比賽.pdf',                       initial:{ai:17,media:18,narrative:18,advocacy:18,completion:18} },
+  { id:21, title:'消失的帳號:包子超人的免費貼圖風波',videoUrl:'https://youtu.be/dNdFsvgb49U', docUrl:'https://docs.google.com/document/d/1XWOhkreXa4m1nXswJAKa9HjsiN1lKXde/edit?usp=sharing', pdfFile:'21-消失的帳號：包子超人的免費貼圖風波.pdf',    initial:{ai:18,media:18,narrative:18,advocacy:18,completion:18} },
+  { id:22, title:'螢幕後的幻影:小雨的粉色與深藍',  videoUrl:'https://youtu.be/6PJfBkGivzM', docUrl:'https://docs.google.com/document/d/1EhCyKW-bVbmRuTOp9hT7qPiLZXnHMOAz/edit?usp=sharing', pdfFile:'22-螢幕後的幻影：小雨的粉色與深藍.pdf',       initial:{ai:18,media:19,narrative:19,advocacy:18,completion:19} },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentWork = null;
+let scores = {}; // { workId: { ai, media, narrative, advocacy, completion, comment } }
+let reviewerName = localStorage.getItem('reviewerName') || '評審委員';
+let apiKey = localStorage.getItem('apiKey') || '';
+let aiPanelOpen = false;
+const PDF_BASE = '國中/PDF/';
+const QUICK_SCORES = [14, 16, 18, 20];
+
+// Load saved scores
+try { scores = JSON.parse(localStorage.getItem('reviewScores') || '{}'); } catch(e) { scores = {}; }
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  renderWorkList(WORKS);
+  updateProgress();
+  document.getElementById('totalCount').textContent = WORKS.length;
+  // Select first work
+  if (WORKS.length) selectWork(WORKS[0]);
+}
+
+function renderWorkList(works) {
+  const list = document.getElementById('workList');
+  list.innerHTML = works.map(w => {
+    const s = scores[w.id];
+    const total = s ? calcTotal(s) : null;
+    const isScored = s && CRITERIA.every(c => s[c.key] != null);
+    return `<div class="work-item${currentWork?.id===w.id?' active':''}${isScored?' scored':''}" onclick="selectWork(WORKS.find(x=>x.id===${w.id}));closeAll()">
+      <div class="work-num">組別 ${String(w.id).padStart(2,'0')}</div>
+      <div class="work-title">${w.title}</div>
+      ${isScored ? `<div class="work-score-badge">✓ ${total} 分</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function filterWorks() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = q ? WORKS.filter(w => w.title.toLowerCase().includes(q) || String(w.id).includes(q)) : WORKS;
+  renderWorkList(filtered);
+}
+
+function selectWork(work) {
+  currentWork = work;
+  renderWorkList(WORKS.filter(w => {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    return !q || w.title.toLowerCase().includes(q) || String(w.id).includes(q);
+  }));
+
+  // Update center header
+  document.getElementById('workHeaderBar').style.display = '';
+  document.getElementById('centerTitle').textContent = work.title;
+  document.getElementById('metaGroup').textContent = `組別 ${String(work.id).padStart(2,'0')}`;
+
+  // Load PDF
+  loadPDF(work);
+  // Load Video
+  loadVideo(work);
+  // Render scoring panel
+  renderScoring(work);
+}
+
+function loadPDF(work) {
+  const frame = document.getElementById('pdfFrame');
+  const placeholder = document.getElementById('pdfPlaceholder');
+  const fallback = document.getElementById('pdfFallback');
+  const link = document.getElementById('pdfOpenLink');
+
+  placeholder.style.display = 'none';
+  const pdfUrl = PDF_BASE + work.pdfFile;
+  frame.src = pdfUrl;
+  frame.style.display = 'block';
+  fallback.style.display = 'none';
+  link.href = work.docUrl;
+
+  frame.onerror = () => { frame.style.display='none'; fallback.style.display='flex'; };
+}
+
+function loadVideo(work) {
+  const frame = document.getElementById('videoFrame');
+  const placeholder = document.getElementById('videoPlaceholder');
+  const external = document.getElementById('videoExternal');
+  const extLink = document.getElementById('videoExternalLink');
+  const extUrl = document.getElementById('videoExternalUrl');
+
+  placeholder.style.display = 'none';
+
+  const ytMatch = work.videoUrl.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/);
+  if (ytMatch) {
+    frame.src = `https://www.youtube.com/embed/${ytMatch[1]}?rel=0`;
+    frame.style.display = 'block';
+    external.style.display = 'none';
+  } else {
+    frame.src = '';
+    frame.style.display = 'none';
+    external.style.display = 'flex';
+    extLink.href = work.videoUrl;
+    extUrl.textContent = work.videoUrl.substring(0,80) + (work.videoUrl.length > 80 ? '...' : '');
+  }
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Scoring ───────────────────────────────────────────────────────────────────
+function renderScoring(work) {
+  if (!scores[work.id]) scores[work.id] = {};
+  const s = scores[work.id];
+
+  const initialTotal = CRITERIA.reduce((sum,c) => sum + (work.initial[c.key]||0), 0);
+
+  const criteriaHTML = CRITERIA.map(c => {
+    const initVal = work.initial[c.key] || 0;
+    const curVal = s[c.key];
+    return `<div class="criterion-item">
+      <div class="criterion-header">
+        <span class="criterion-name">${c.name}</span>
+        <span class="criterion-weight">${Math.round(c.weight*100)}%</span>
+      </div>
+      <div class="criterion-desc">${c.desc}</div>
+      <div class="criterion-initial">初審分數：<span>${initVal} / 20</span></div>
+      <div class="score-row">
+        <div class="score-quick">
+          ${QUICK_SCORES.map(v => `<button class="score-q-btn${curVal===v?' sel':''}" onclick="setScore('${c.key}',${v})">${v}</button>`).join('')}
+        </div>
+        <input class="score-num" type="number" min="0" max="20" value="${curVal??''}" placeholder="—" oninput="setScoreInput('${c.key}',this.value)" id="input-${work.id}-${c.key}">
+      </div>
+    </div>`;
+  }).join('');
+
+  const total = calcTotal(s);
+
+  const rightBody = document.getElementById('rightBody');
+  rightBody.innerHTML = `
+    <div>
+      <div class="section-label">快速一鍵填分（全項目）</div>
+      <div class="quick-btns">
+        ${QUICK_SCORES.map(v => `<button class="quick-btn" onclick="applyAll(${v})">${v} 分</button>`).join('')}
+      </div>
+    </div>
+
+    ${aiPanelOpen ? renderAIPanel() : ''}
+
+    <div id="criteriaArea">${criteriaHTML}</div>
+
+    <div class="total-box">
+      <div class="total-label">本組加權重總分</div>
+      <div class="total-value" id="totalDisplay">${total ?? '—'}</div>
+      <div class="total-max">/ 100 分</div>
+      <div class="initial-total">初審總分：<span>${initialTotal}</span> / 100</div>
+    </div>
+
+    <div>
+      <div class="section-label">評語備註</div>
+      <textarea class="comment-area" placeholder="輸入評語（選填）..." id="commentArea" oninput="saveComment(this.value)">${s.comment||''}</textarea>
+    </div>
+
+    <div class="submit-row">
+      <button class="btn-submit" onclick="submitScore()">✅ 確認送出評分</button>
+      <button class="btn-save" onclick="saveDraft()">💾 暫存</button>
+    </div>
+  `;
+
+  if (!aiPanelOpen) {
+    const aiSection = document.createElement('div');
+    aiSection.innerHTML = renderAIPanel();
+    aiSection.id = 'aiSection';
+    aiSection.style.display = 'none';
+    rightBody.querySelector('.submit-row').after(aiSection);
+  }
+}
+
+function renderAIPanel() {
+  return `<div class="ai-panel" id="aiPanelEl">
+    <div class="ai-panel-header">
+      <span class="ai-label">🤖 AI 智慧評分助理</span>
+    </div>
+    <div class="api-input-row">
+      <input class="api-key-input" type="password" id="apiKeyInput" placeholder="貼上您的 Claude API Key..." value="${apiKey}">
+      <button class="btn-ai-score" id="aiScoreBtn" onclick="runAIScore()">評分</button>
+    </div>
+    <div class="ai-status" id="aiStatus">輸入 API Key 後點擊評分，AI 將依評分標準分析作品</div>
+  </div>`;
+}
+
+function toggleAIPanel() {
+  aiPanelOpen = !aiPanelOpen;
+  if (currentWork) renderScoring(currentWork);
+}
+
+function setScore(key, val) {
+  if (!currentWork) return;
+  if (!scores[currentWork.id]) scores[currentWork.id] = {};
+  scores[currentWork.id][key] = val;
+  saveScores();
+  renderScoring(currentWork);
+}
+
+function setScoreInput(key, val) {
+  if (!currentWork) return;
+  const n = parseInt(val);
+  if (!isNaN(n) && n >= 0 && n <= 20) {
+    if (!scores[currentWork.id]) scores[currentWork.id] = {};
+    scores[currentWork.id][key] = n;
+    saveScores();
+    updateTotalDisplay();
+  }
+}
+
+function applyAll(val) {
+  if (!currentWork) return;
+  if (!scores[currentWork.id]) scores[currentWork.id] = {};
+  CRITERIA.forEach(c => { scores[currentWork.id][c.key] = val; });
+  saveScores();
+  renderScoring(currentWork);
+}
+
+function saveComment(val) {
+  if (!currentWork) return;
+  if (!scores[currentWork.id]) scores[currentWork.id] = {};
+  scores[currentWork.id].comment = val;
+  saveScores();
+}
+
+function calcTotal(s) {
+  if (!s) return null;
+  let sum = 0, valid = true;
+  CRITERIA.forEach(c => {
+    if (s[c.key] == null) { valid = false; return; }
+    sum += s[c.key];
+  });
+  return valid ? sum : null;
+}
+
+function updateTotalDisplay() {
+  const el = document.getElementById('totalDisplay');
+  if (el && currentWork) {
+    const t = calcTotal(scores[currentWork.id]);
+    el.textContent = t ?? '—';
+  }
+}
+
+function saveScores() {
+  localStorage.setItem('reviewScores', JSON.stringify(scores));
+  updateProgress();
+}
+
+function updateProgress() {
+  const done = WORKS.filter(w => {
+    const s = scores[w.id];
+    return s && CRITERIA.every(c => s[c.key] != null);
+  }).length;
+  document.getElementById('scoredCount').textContent = done;
+  document.getElementById('totalCount').textContent = WORKS.length;
+}
+
+function saveDraft() {
+  saveScores();
+  showToast('💾 已暫存評分');
+}
+
+function submitScore() {
+  if (!currentWork) return;
+  const s = scores[currentWork.id];
+  if (!s || CRITERIA.some(c => s[c.key] == null)) {
+    showToast('⚠️ 請完成所有項目評分', 'red');
+    return;
+  }
+  saveScores();
+  renderWorkList(WORKS);
+  showToast('✅ 評分已送出');
+  // Auto advance
+  const idx = WORKS.findIndex(w => w.id === currentWork.id);
+  if (idx < WORKS.length - 1) setTimeout(() => selectWork(WORKS[idx+1]), 600);
+}
+
+// ── AI Scoring ────────────────────────────────────────────────────────────────
+async function runAIScore() {
+  const keyInput = document.getElementById('apiKeyInput');
+  const key = keyInput?.value?.trim();
+  if (!key) { setAIStatus('請輸入 API Key', 'error'); return; }
+  apiKey = key;
+  localStorage.setItem('apiKey', key);
+
+  if (!currentWork) { setAIStatus('請先選擇作品', 'error'); return; }
+
+  setAIStatus('🔄 AI 評分中，請稍候...', 'loading');
+  document.getElementById('aiScoreBtn').disabled = true;
+
+  const work = currentWork;
+  const prompt = `你是一位專業的競賽評審，請依以下評分標準對「${work.title}」這部有聲繪本作品進行客觀評分。
+
+評分標準（每項滿分20分）：
+${CRITERIA.map(c => `- ${c.name}（${Math.round(c.weight*100)}%）：${c.desc}`).join('\n')}
+
+作品影片連結：${work.videoUrl}
+初審參考分數：${CRITERIA.map(c => `${c.name} ${work.initial[c.key]}分`).join('、')}
+
+請根據競賽主題「AI識詐行動：有聲繪本創作競賽」的精神，給出複審建議分數與簡短理由。
+請以JSON格式回覆，格式如下：
+{
+  "scores": {
+    "ai": <數字>,
+    "media": <數字>,
+    "narrative": <數字>,
+    "advocacy": <數字>,
+    "completion": <數字>
+  },
+  "comment": "<100字內評語>"
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-calls': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI 回應格式異常');
+    const result = JSON.parse(jsonMatch[0]);
+
+    if (!scores[work.id]) scores[work.id] = {};
+    Object.assign(scores[work.id], result.scores);
+    if (result.comment) scores[work.id].comment = result.comment;
+    saveScores();
+    renderScoring(work);
+    setAIStatus('✅ AI 評分完成，已填入建議分數', 'success');
+  } catch(e) {
+    setAIStatus('❌ ' + e.message, 'error');
+  } finally {
+    const btn = document.getElementById('aiScoreBtn');
+    if (btn) btn.disabled = false;
+  }
+}
+
+function setAIStatus(msg, type) {
+  const el = document.getElementById('aiStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'ai-status' + (type ? ' '+type : '');
+}
+
+// ── Export CSV ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const headers = ['組別','題目', ...CRITERIA.map(c=>c.name), '複審總分', '初審總分', '評語', '評審姓名'];
+  const rows = WORKS.map(w => {
+    const s = scores[w.id] || {};
+    const total = calcTotal(s) ?? '';
+    const initTotal = CRITERIA.reduce((sum,c) => sum + (w.initial[c.key]||0), 0);
+    return [
+      w.id,
+      `"${w.title}"`,
+      ...CRITERIA.map(c => s[c.key] ?? ''),
+      total,
+      initTotal,
+      `"${(s.comment||'').replace(/"/g,'""')}"`,
+      `"${reviewerName}"`
+    ];
+  });
+
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const bom = '﻿';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `複審評分_${reviewerName}_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('📥 CSV 已下載');
+}
+
+// ── Reviewer Modal ────────────────────────────────────────────────────────────
+function openReviewerModal() {
+  document.getElementById('reviewerName').value = reviewerName;
+  document.getElementById('reviewerModal').classList.add('open');
+}
+function closeReviewerModal() {
+  document.getElementById('reviewerModal').classList.remove('open');
+}
+function saveReviewer() {
+  reviewerName = document.getElementById('reviewerName').value.trim() || '評審委員';
+  localStorage.setItem('reviewerName', reviewerName);
+  closeReviewerModal();
+  showToast('👤 評審姓名已更新');
+}
+
+// ── Mobile Panel Toggle ───────────────────────────────────────────────────────
+function toggleLeft() {
+  const p = document.getElementById('panelLeft');
+  const bd = document.getElementById('backdrop');
+  const isOpen = p.classList.toggle('open');
+  bd.classList.toggle('show', isOpen);
+  document.getElementById('panelRight').classList.remove('open');
+}
+function toggleRight() {
+  const p = document.getElementById('panelRight');
+  const bd = document.getElementById('backdrop');
+  const isOpen = p.classList.toggle('open');
+  bd.classList.toggle('show', isOpen);
+  document.getElementById('panelLeft').classList.remove('open');
+}
+function closeAll() {
+  document.getElementById('panelLeft').classList.remove('open');
+  document.getElementById('panelRight').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('show');
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = type === 'red' ? 'var(--red)' : 'var(--green)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
