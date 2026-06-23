@@ -434,44 +434,8 @@ function loadPDF(work) {
   nameEl.textContent = work.pdfFile;
   toolbar.style.display = 'flex';
 
-  // On mobile, PDF iframes are unreliable — show fallback immediately on small screens
-  const isMobile = window.innerWidth < 768;
-  if (isMobile) {
-    frame.style.display = 'none';
-    fallback.style.display = 'flex';
-    return;
-  }
-
   frame.style.display = 'block';
-  frame.src = '';
-  // Small delay to let browser settle before loading
-  setTimeout(() => { frame.src = url; }, 50);
-
-  // iframe onerror fires inconsistently; use a load-check instead
-  let loaded = false;
-  frame.onload = () => {
-    loaded = true;
-    try {
-      // If cross-origin PDF is blocked, contentDocument may be null or empty
-      if (!frame.contentDocument && !frame.contentWindow?.document?.body?.innerHTML) {
-        throw new Error('empty');
-      }
-    } catch(e) {
-      // cross-origin — can't inspect; assume success if no error thrown by browser
-    }
-  };
-  frame.onerror = () => {
-    loaded = true;
-    frame.style.display = 'none';
-    fallback.style.display = 'flex';
-  };
-  // Timeout fallback: if nothing loaded in 8s, show fallback
-  setTimeout(() => {
-    if (!loaded) {
-      frame.style.display = 'none';
-      fallback.style.display = 'flex';
-    }
-  }, 8000);
+  frame.src = url;
 }
 
 function loadVideo(work) {
