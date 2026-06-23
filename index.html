@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI識詐行動 — 複審評分平台</title>
 <style>
   :root {
@@ -86,8 +86,11 @@
   .meta-tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--text2); }
 
   /* PDF */
-  .pdf-frame { flex: 1; border: none; background: #525659; }
+  .pdf-frame { flex: 1; border: none; background: #525659; min-height: 0; }
   .pdf-fallback { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text2); }
+  .pdf-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 12px; background: var(--surface2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .pdf-toolbar a { font-size: 12px; color: var(--accent); text-decoration: none; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 6px; }
+  .pdf-toolbar a:hover { background: rgba(79,110,247,0.15); }
 
   /* Video */
   .video-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; overflow: hidden; }
@@ -253,11 +256,16 @@
             <div style="font-size:48px">📋</div>
             <div style="font-size:14px">請從左側選擇作品</div>
           </div>
+          <div id="pdfToolbar" class="pdf-toolbar" style="display:none">
+            <span style="font-size:11px;color:var(--text3);flex:1" id="pdfFileName"></span>
+            <a id="pdfDownloadLink" href="#" target="_blank">⬇ 下載 PDF</a>
+            <a id="pdfOpenLink" href="#" target="_blank">🔗 新分頁開啟</a>
+          </div>
           <iframe id="pdfFrame" class="pdf-frame" style="display:none"></iframe>
           <div id="pdfFallback" class="pdf-fallback" style="display:none">
-            <div style="font-size:32px">📄</div>
-            <div style="font-size:14px;color:var(--text2)">PDF 無法直接顯示</div>
-            <a id="pdfOpenLink" href="#" target="_blank" class="open-btn">🔗 開啟作品說明書</a>
+            <div style="font-size:40px">📄</div>
+            <div style="font-size:14px;color:var(--text2)">PDF 無法在此顯示</div>
+            <div style="font-size:12px;color:var(--text3)">請使用上方連結開啟</div>
           </div>
         </div>
       </div>
@@ -284,7 +292,10 @@
   <div class="panel-right" id="panelRight">
     <div class="right-header">
       <span>✍️ 評分工作區</span>
-      <button class="btn btn-ai btn-sm" style="font-size:11px;padding:4px 8px" onclick="toggleAIPanel()">🤖 AI 評分</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-ai btn-sm" style="font-size:11px;padding:4px 8px" onclick="toggleAIPanel()">🤖 AI</button>
+        <button class="panel-toggle" style="font-size:11px;padding:4px 8px" onclick="closeAll()">✕ 關閉</button>
+      </div>
     </div>
     <div class="right-body" id="rightBody">
       <div style="text-align:center;color:var(--text3);padding:40px 0;font-size:13px">請從左側選擇作品開始評分</div>
@@ -349,6 +360,7 @@ let reviewerName = localStorage.getItem('reviewerName') || '評審委員';
 let apiKey = localStorage.getItem('apiKey') || '';
 let aiPanelOpen = false;
 const PDF_BASE = '國中/PDF/';
+function pdfUrl(filename) { return encodeURI(PDF_BASE + filename); }
 const QUICK_SCORES = [14, 16, 18, 20];
 
 // Load saved scores
@@ -407,16 +419,59 @@ function loadPDF(work) {
   const frame = document.getElementById('pdfFrame');
   const placeholder = document.getElementById('pdfPlaceholder');
   const fallback = document.getElementById('pdfFallback');
-  const link = document.getElementById('pdfOpenLink');
+  const toolbar = document.getElementById('pdfToolbar');
+  const openLink = document.getElementById('pdfOpenLink');
+  const dlLink = document.getElementById('pdfDownloadLink');
+  const nameEl = document.getElementById('pdfFileName');
 
   placeholder.style.display = 'none';
-  const pdfUrl = PDF_BASE + work.pdfFile;
-  frame.src = pdfUrl;
-  frame.style.display = 'block';
   fallback.style.display = 'none';
-  link.href = work.docUrl;
 
-  frame.onerror = () => { frame.style.display='none'; fallback.style.display='flex'; };
+  const url = pdfUrl(work.pdfFile);
+  openLink.href = url;
+  dlLink.href = url;
+  dlLink.download = work.pdfFile;
+  nameEl.textContent = work.pdfFile;
+  toolbar.style.display = 'flex';
+
+  // On mobile, PDF iframes are unreliable — show fallback immediately on small screens
+  const isMobile = window.innerWidth < 768;
+  if (isMobile) {
+    frame.style.display = 'none';
+    fallback.style.display = 'flex';
+    return;
+  }
+
+  frame.style.display = 'block';
+  frame.src = '';
+  // Small delay to let browser settle before loading
+  setTimeout(() => { frame.src = url; }, 50);
+
+  // iframe onerror fires inconsistently; use a load-check instead
+  let loaded = false;
+  frame.onload = () => {
+    loaded = true;
+    try {
+      // If cross-origin PDF is blocked, contentDocument may be null or empty
+      if (!frame.contentDocument && !frame.contentWindow?.document?.body?.innerHTML) {
+        throw new Error('empty');
+      }
+    } catch(e) {
+      // cross-origin — can't inspect; assume success if no error thrown by browser
+    }
+  };
+  frame.onerror = () => {
+    loaded = true;
+    frame.style.display = 'none';
+    fallback.style.display = 'flex';
+  };
+  // Timeout fallback: if nothing loaded in 8s, show fallback
+  setTimeout(() => {
+    if (!loaded) {
+      frame.style.display = 'none';
+      fallback.style.display = 'flex';
+    }
+  }, 8000);
 }
 
 function loadVideo(work) {
@@ -616,6 +671,7 @@ function submitScore() {
   saveScores();
   renderWorkList(WORKS);
   showToast('✅ 評分已送出');
+  closeAll(); // close panels on mobile
   // Auto advance
   const idx = WORKS.findIndex(w => w.id === currentWork.id);
   if (idx < WORKS.length - 1) setTimeout(() => selectWork(WORKS[idx+1]), 600);
